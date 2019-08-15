@@ -1,9 +1,6 @@
 # trycatch-ai
 2019 emotion summer vacation project - trycatch ai (reinforcement learning, Deep Q Networks)
 
-# trycatch-ai
-2019 emotion summer vacation project - trycatch ai (reinforcement learning, Deep Q Networks)
-
 # result
 [![result.mov]](https://github.com/gtg7784/trycatch-ai/blob/master/result/result.mov)
 
@@ -217,3 +214,75 @@ class ReplayMemory:
 
     return inputs, targets
 ```
+리플레이 메모리를 구현한 ReplayMemory 클래스를 정의합니다. 각각의 함수별로 수행하는 기능을 정리하면 다음과 같습니다.
+
+1. `__init__` : 클래스 생성시 호출되는 생성자로써 리플레이 메모리의 상태값을 초기화합니다.
+2. `remember` : 현재 경험(S, A, R(s, s'), s')을 리플레이 메모리에 저장합니다.
+3. `getBatch` : 리플레이 메모리에서 랜덤 샘플링을 통해 임의의 기억을 가져오고, 해당 기억의 현재 상태값과 다음 상태값을 DQN에 넣고 Q* = reward + discount(gamma) * max_a' Q(s',a') 식을 계산해서 얻은 타겟 Q값을 배치크기만큼 묶어서 리턴합니다.
+
+```
+def main(_):
+  print("트레이닝을 시작합니다.")
+
+  env = CatchEnvironment(gridSize)
+
+  memory = ReplayMemory(gridSize, maxMemory, discount)
+
+  saver = tf.train.Saver()
+  
+  winCount = 0
+  with tf.Session() as sess:   
+    sess.run(tf.global_variables_initializer())
+
+    for i in range(num_epochs+1):
+      err = 0
+      env.reset()
+
+      isGameOver = False
+
+      currentState = env.observe()
+            
+      while (isGameOver != True):
+        action = -9999
+        global epsilon
+        if (randf(0, 1) <= epsilon):
+          action = random.randrange(0, num_actions)
+        else: 
+          q = sess.run(y_pred, feed_dict={x: currentState})   
+          action = q.argmax()
+
+        if (epsilon > epsilonMinimumValue):
+          epsilon = epsilon * 0.999
+        
+        nextState, reward, gameOver, stateInfo = env.act(action)
+            
+        if (reward == 1):
+          winCount = winCount + 1
+
+        memory.remember(currentState, action, reward, nextState, gameOver)
+        
+        currentState = nextState
+        isGameOver = gameOver
+                
+        inputs, targets = memory.getBatch(y_pred, batch_size, num_actions, state_size, sess, x)
+        
+        _, loss_print = sess.run([optimizer, loss], feed_dict={x: inputs, y: targets})  
+        err = err + loss_print
+
+      print("반복(Epoch): %d, 에러(err): %.4f, 승리횟수(Win count): %d, 승리비율(Win ratio): %.4f" % (i, err, winCount, float(winCount)/float(i+1)*100))
+    print("트레이닝 완료")
+    save_path = saver.save(sess, os.getcwd()+"/model.ckpt")
+    print("%s 경로에 파라미터가 저장되었습니다" % save_path)
+```
+main 함수입니다. CatchEnvironment와 ReplayMemory 클래스를 선언하고, 학습된 파라미터를 저장할 saver를 선언합니다. 세션을 열어서 변수에 초기값들을 선언하고,초기 action의 Q 값을 -9999로 초기화합니다. epsilon 확률로 랜덤한 행동을 하고, (1 - epsilon) 확률만큼 DQN을 이용해서 각각의 행동에 대한 Q값을 예측하고 가장 Q값이 큰 최적의 행동을 합니다.  
+epsilon-Greedy 기법을 이용해서 epsilon 값을 점차 갑소시켜, 에이전트가 학습 초반에는 랜덤한 행동을 많이 하고, 학습이 진행될수록 최적의 행동을 하도록 유도합니다. 또한 현재 경험(S, A, R(s, s'), s')을 리플레이 메모리에 저장하고, 리플레이 메모리에서 랜덤 샘플링을 통해서 임의의 배치를 불러와서 최적화를 진행합니다. 지정된 횟수만큼 반복이 끝나면 학습된 파라미터를 model.cpkt 체크포인트 파일로 저장합니다.
+
+```
+if __name__ == '__main__':
+  tf.app.run()
+```
+tf.app.run() 함수를 실행합니다.
+
+-----
+
+### visualize.ipynb
