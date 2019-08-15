@@ -7,10 +7,11 @@
 # 코드 설명
 
 ### train.py
+
 ```
 # -*- coding: utf-8 -*-
 ```
-utf-8 형식으로 인코딩
+utf-8 형식으로 인코딩합니다.
 
 ```
 import tensorflow as tf
@@ -275,7 +276,7 @@ def main(_):
     print("%s 경로에 파라미터가 저장되었습니다" % save_path)
 ```
 main 함수입니다. CatchEnvironment와 ReplayMemory 클래스를 선언하고, 학습된 파라미터를 저장할 saver를 선언합니다. 세션을 열어서 변수에 초기값들을 선언하고,초기 action의 Q 값을 -9999로 초기화합니다. epsilon 확률로 랜덤한 행동을 하고, (1 - epsilon) 확률만큼 DQN을 이용해서 각각의 행동에 대한 Q값을 예측하고 가장 Q값이 큰 최적의 행동을 합니다.  
-epsilon-Greedy 기법을 이용해서 epsilon 값을 점차 갑소시켜, 에이전트가 학습 초반에는 랜덤한 행동을 많이 하고, 학습이 진행될수록 최적의 행동을 하도록 유도합니다. 또한 현재 경험(S, A, R(s, s'), s')을 리플레이 메모리에 저장하고, 리플레이 메모리에서 랜덤 샘플링을 통해서 임의의 배치를 불러와서 최적화를 진행합니다. 지정된 횟수만큼 반복이 끝나면 학습된 파라미터를 model.cpkt 체크포인트 파일로 저장합니다.
+epsilon-Greedy 기법을 이용해서 epsilon 값을 점차 갑소시켜, 에이전트가 학습 초반에는 랜덤한 행동을 많이 하고, 학습이 진행될수록 최적의 행동을 하도록 유도합니다. 또한 현재 경험(S, A, R(s, s'), s')을 리플레이 메모리에 저장하고, 리플레이 메모리에서 랜덤 샘플링을 통해서 임의의 배치를 불러와서 최적화를 진행합니다. 지정된 횟수만큼 반복이 끝나면 학습된 파라미터를 model.ckpt 체크포인트 파일로 저장합니다.
 
 ```
 if __name__ == '__main__':
@@ -286,3 +287,109 @@ tf.app.run() 함수를 실행합니다.
 -----
 
 ### visualize.ipynb
+
+```
+# -*- coding: utf-8 -*-
+```
+utf-8 형식으로 인코딩합니다.
+
+```
+%matplotlib
+%matplotlib inline
+
+from train import *
+from IPython import display
+import matplotlib.patches as patches
+import pylab as pl
+import time
+import tensorflow as tf
+import os
+```
+필요한 라이브러리를 임포트합니다.
+
+```
+gridSize = 10
+maxGames = 100
+env = CatchEnvironment(gridSize)
+winCount = 0
+loseCount = 0
+numberOfGames = 0
+```
+필요한 설정값들을 정의합니다. maxGames 횟수만큼 DQN 에이전트가 게임을 플레이합니다.
+
+```
+ground = 1
+plot = pl.figure(figsize=(12,12))
+axis = plot.add_subplot(111, aspect='equal')
+axis.set_xlim([-1, 12])
+axis.set_ylim([0, 12])
+```
+화면을 그리기 위한 설정값들을 정의합니다.
+
+```
+saver = tf.train.Saver()
+```
+model.ckpt 파일로 저장한 학습된 파라미터를 읽어오기 위해서 tf.train.Saver() API를 선언합니다.
+
+```
+def drawState(fruitRow, fruitColumn, basket, gridSize):
+  fruitX = fruitColumn 
+  fruitY = (gridSize - fruitRow + 1)
+  statusTitle = "Wins: " + str(winCount) + "  Losses: " + str(loseCount) + "  TotalGame: " + str(numberOfGames)
+  axis.set_title(statusTitle, fontsize=30)
+  for p in [
+    patches.Rectangle(
+        ((ground - 1), (ground)), 11, 10,
+        facecolor="#000000"
+    ),
+    patches.Rectangle(
+        (basket - 1, ground), 2, 0.5,
+        facecolor="#FF0000"
+    ),
+    patches.Rectangle(
+        (fruitX - 0.5, fruitY - 0.5), 1, 1,
+        facecolor="#0000FF"       # Blue
+    ),   
+    ]:
+      axis.add_patch(p)
+  display.clear_output(wait=True)
+  display.display(pl.gcf())
+```
+현재 상태를 화면에 그리기 위한 drawState 함수를 정의합니다. 과일은 파란색, 바구니는 빨간색, 배경은 검은색 네모로 표현합니다. 승리 횟수, 패배 횟수, 전체 게임 횟수를 화면 상단에 출력합니다.
+
+```
+with tf.Session() as sess:    
+  saver.restore(sess, os.getcwd()+"/model.ckpt")
+  print('파라미터를 불러왔습니다!')
+
+  while (numberOfGames < maxGames):
+    numberOfGames = numberOfGames + 1
+     
+    isGameOver = False
+    fruitRow, fruitColumn, basket = env.reset()
+    currentState = env.observe()
+    drawState(fruitRow, fruitColumn, basket, gridSize)
+
+    while (isGameOver != True):
+      q = sess.run(y_pred, feed_dict={x: currentState})
+      action = q.argmax()
+
+      nextState, reward, gameOver, stateInfo = env.act(action)    
+      fruitRow = stateInfo[0]
+      fruitColumn = stateInfo[1]
+      basket = stateInfo[2]
+     
+      if (reward == 1):
+        winCount = winCount + 1
+      elif (reward == -1):
+        loseCount = loseCount + 1
+
+      currentState = nextState
+      isGameOver = gameOver
+      drawState(fruitRow, fruitColumn, basket, gridSize)
+    
+      time.sleep(0.003)
+
+display.clear_output(wait=True)
+```
+세선을 열어서 그래프를 실행합니다. model.ckpt 파일로부터 저장된 DQN 파라미터를 읽어오고, 현재 상태를 DQN의 입력값으로 넣고 구한 Q값 중 가장 큰 Q값을 가지는 행동을 취합니다.
