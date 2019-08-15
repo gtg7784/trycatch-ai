@@ -1,2 +1,219 @@
 # trycatch-ai
 2019 emotion summer vacation project - trycatch ai (reinforcement learning, Deep Q Networks)
+
+# trycatch-ai
+2019 emotion summer vacation project - trycatch ai (reinforcement learning, Deep Q Networks)
+
+# result
+[![result.mov]](https://github.com/gtg7784/trycatch-ai/blob/master/result/result.mov)
+
+# 코드 설명
+
+### train.py
+```
+# -*- coding: utf-8 -*-
+```
+utf-8 형식으로 인코딩
+
+```
+import tensorflow as tf
+import numpy as np
+import random
+import math
+import os
+```
+텐서플로우 및 학습에 필요한 라이브러리를 불러옵니다.
+
+```
+epsilon = 1
+epsilonMinimumValue = .001
+num_actions = 3
+num_epochs = 2000
+hidden_size = 128
+maxMemory = 500
+batch_size = 50
+gridSize = 10
+state_size = gridSize * gridSize 
+discount = 0.9
+learning_rate = 0.2	
+```
+학습에 필요한 설정값을 선언합니다.
+
+epsilon-Greedy 기법에 사용할 초기 입실론값 - epsilon  
+최소 입실론값 - epsilonMinimumValue  
+가능한 행동의 개수 (좌, 우, 가만히 있기) - num_actions  
+학습에 사용할 반복 횟수 - num_epochs  
+은닉층의 노드 개수 - hidden_size  
+리플리에 메모리의 최대 크기 - maxMemory  
+배치 사이즈 - batch_size  
+게임의 크기 - gridSize  
+Discount Factor - discount  
+Learning Rate - learning_rate  
+
+```
+def randf(s, e):
+  return (float(random.randrange(0, (e - s) * 9999)) / 10000) + s;
+```
+s(start)와 e(end) 사이의 랜덤한 값을 리턴하는 randf 함수를 정의합니다.
+
+```
+def build_DQN(x):
+  W1 = tf.Variable(tf.truncated_normal(shape=[state_size, hidden_size], stddev=1.0 / math.sqrt(float(state_size))))
+  b1 = tf.Variable(tf.truncated_normal(shape=[hidden_size], stddev=0.01))  
+  H1_output = tf.nn.relu(tf.matmul(x, W1) + b1)
+  W2 = tf.Variable(tf.truncated_normal(shape=[hidden_size, hidden_size],stddev=1.0 / math.sqrt(float(hidden_size))))
+  b2 = tf.Variable(tf.truncated_normal(shape=[hidden_size], stddev=0.01))
+  H2_output = tf.nn.relu(tf.matmul(H1_output, W2) + b2)
+  W3 = tf.Variable(tf.truncated_normal(shape=[hidden_size, num_actions],stddev=1.0 / math.sqrt(float(hidden_size))))
+  b3 = tf.Variable(tf.truncated_normal(shape=[num_actions], stddev=0.01))
+  output_layer = tf.matmul(H2_output, W3) + b3
+
+  return tf.squeeze(output_layer)
+```
+Deep Q Network를 만드는 build_DQN 함수를 정의합니다.  
+DQN은 입력층(input layer)으로 게임의 현재 상태 s(10 * 10 Grid = 100)를 입력받아서, 128개의 노드를 가지고 있는 은닉층(hidden layer)을 2개 거쳐서 현재 상태에서 취할수 있는 각각의 행동에 대한 Q(s, a)(3개) 예측값을 출력층(output layer)에서 출력합니다.
+
+```
+x = tf.placeholder(tf.float32, shape=[None, state_size])
+y = tf.placeholder(tf.float32, shape=[None, num_actions])
+
+y_pred = build_DQN(x)
+```
+인풋인 현재 상태(10 * 10 Grid = 100)와 타겟 Q*(s, a)값을 입력 받을 플레이스홀더 x, y를 선언하고, build_DQN 함수를 사용하여 DQN 모델을 만듭니다.
+
+```
+loss = tf.reduce_sum(tf.square(y-y_pred)) / (2*batch_size)
+optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss)
+```
+MSE 손실 함수와 옵티마이저를 정의합니다.
+
+```
+class CatchEnvironment():
+  def __init__(self, gridSize):
+    self.gridSize = gridSize
+    self.state_size = self.gridSize * self.gridSize
+    self.state = np.empty(3, dtype = np.uint8) 
+
+  def observe(self):
+    canvas = self.drawState()
+    canvas = np.reshape(canvas, (-1,self.state_size))
+    return canvas
+
+  def drawState(self):
+    canvas = np.zeros((self.gridSize, self.gridSize))
+    canvas[self.state[0]-1, self.state[1]-1] = 1  
+    canvas[self.gridSize-1, self.state[2] -1 - 1] = 1
+    canvas[self.gridSize-1, self.state[2] -1] = 1
+    canvas[self.gridSize-1, self.state[2] -1 + 1] = 1    
+    return canvas        
+
+  def reset(self): 
+    initialFruitColumn = random.randrange(1, self.gridSize + 1)
+    initialBucketPosition = random.randrange(2, self.gridSize + 1 - 1)
+    self.state = np.array([1, initialFruitColumn, initialBucketPosition]) 
+    return self.getState()
+
+  def getState(self):
+    stateInfo = self.state
+    fruit_row = stateInfo[0]
+    fruit_col = stateInfo[1]
+    basket = stateInfo[2]
+    return fruit_row, fruit_col, basket
+
+  def getReward(self):
+    fruitRow, fruitColumn, basket = self.getState()
+    if (fruitRow == self.gridSize - 1):  
+      if (abs(fruitColumn - basket) <= 1): 
+        return 1
+      else:
+        return -1
+    else:
+      return 0
+
+  def isGameOver(self):
+    if (self.state[0] == self.gridSize - 1): 
+      return True 
+    else: 
+      return False 
+
+  def updateState(self, action):
+    move = 0
+    if (action == 0):
+      move = -1
+    elif (action == 1):
+      move = 0
+    elif (action == 2):
+      move = 1
+    fruitRow, fruitColumn, basket = self.getState()
+    newBasket = min(max(2, basket + move), self.gridSize - 1)
+    fruitRow = fruitRow + 1 
+    self.state = np.array([fruitRow, fruitColumn, newBasket])
+
+  def act(self, action):
+    self.updateState(action)
+    reward = self.getReward()
+    gameOver = self.isGameOver()
+    return self.observe(), reward, gameOver, self.getState()
+```
+게임의 플레이 환경을 만드는 CatchEnvironment 클래스를 정의합니다. 각각의 함수별로 수행하는 기능은 다음과 같습니다.
+1. ` __init__` : 클래스 생성시 호출되는 생성자로써 게임의 상태값들을 
+2. `observe` : drawState를 호출해서 생성된 관찰 결과를 리턴합니다.
+3. `drawState` : 상태값에 따라 캔버스에 과일과 바구니를 그립니다.
+4. `reset` : 게임을 초기상태로 리셋합니다. initialFruitColumn, initialBucketPosition을 랜덤한 값으로 초기화해서 과일을 캔버스 가로축 최상단의 랜덤한 위치, 바구니를 캔버스 가로축 최하단의 랜덤한 위치로 할당합니다.
+5. `getState` : 게임의 현재 상태를 불러옵니다. 과일은 몇 번쨰 세로축에 있고, 얼만큼 떨어져서 몇번째 가로축에 있는지, 바구니는 몇번째 세로축에 있는지를 리턴합니다.
+6. `getReward` : 에이전트가 취한 행동에 대한 보상을 얻습니다. 만약 과일이 바닥에 닿았을 때, 바구니가 과일을 받아내면 1의 reward를 주고, 받아내지 못하면 -1의 reward를 줍니다. 그리고 과일이 바닥에 닿지 않을 때에는 0을 줍니다.
+7. `isGameOver` : 게임이 끝났는지를 체크합니다. 과일이 바닥에 닿으면 게임을 종료합니다.
+8. `updateState` : 에이전트의 action에 따라 바구니의 위치를 업데이트 하고, 한 스텝 시간이 흘러서 과일이 한 칸씩 떨어지는 상태의 업데이트를 진행합니다.
+9. `act` : 에이전트가 행동을 취해서 상태를 업데이트하고, 해당 행동에 대한 reward와 게임 종료 유무를 체크해서 리턴합니다.
+
+```
+class ReplayMemory:
+  def __init__(self, gridSize, maxMemory, discount):
+    self.maxMemory = maxMemory
+    self.gridSize = gridSize
+    self.state_size = self.gridSize * self.gridSize
+    self.discount = discount
+    canvas = np.zeros((self.gridSize, self.gridSize))
+    canvas = np.reshape(canvas, (-1,self.state_size))
+    self.inputState = np.empty((self.maxMemory, 100), dtype = np.float32)
+    self.actions = np.zeros(self.maxMemory, dtype = np.uint8)
+    self.nextState = np.empty((self.maxMemory, 100), dtype = np.float32)
+    self.gameOver = np.empty(self.maxMemory, dtype = np.bool)
+    self.rewards = np.empty(self.maxMemory, dtype = np.int8) 
+    self.count = 0
+    self.current = 0
+
+  def remember(self, currentState, action, reward, nextState, gameOver):
+    self.actions[self.current] = action
+    self.rewards[self.current] = reward
+    self.inputState[self.current, ...] = currentState
+    self.nextState[self.current, ...] = nextState
+    self.gameOver[self.current] = gameOver
+    self.count = max(self.count, self.current + 1)
+    self.current = (self.current + 1) % self.maxMemory
+
+  def getBatch(self, y_pred, batch_size, num_actions, state_size, sess, X):
+    memoryLength = self.count
+    chosenBatchSize = min(batch_size, memoryLength)
+
+    inputs = np.zeros((chosenBatchSize, state_size))
+    targets = np.zeros((chosenBatchSize, num_actions))
+
+    for i in range(chosenBatchSize):
+      randomIndex = random.randrange(0, memoryLength)
+      current_inputState = np.reshape(self.inputState[randomIndex], (1, 100))
+      target = sess.run(y_pred, feed_dict={X: current_inputState})
+      current_nextState = np.reshape(self.nextState[randomIndex], (1, 100))
+      nextStateQ = sess.run(y_pred, feed_dict={X: current_nextState})      
+      nextStateMaxQ = np.amax(nextStateQ)
+
+      if (self.gameOver[randomIndex] == True):
+        target[self.actions[randomIndex]] = self.rewards[randomIndex]
+      else:
+        target[self.actions[randomIndex]] = self.rewards[randomIndex] + self.discount * nextStateMaxQ
+
+      inputs[i] = current_inputState
+      targets[i] = target
+
+    return inputs, targets
+```
