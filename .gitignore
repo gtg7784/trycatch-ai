@@ -1,0 +1,7 @@
+# checkpoint
+checkpoint
+model.ckpt.*
+.ipynb_checkpoints
+
+#pycache
+__pycache__
