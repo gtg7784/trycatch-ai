@@ -2,7 +2,7 @@
 2019 emotion summer vacation project - trycatch ai (reinforcement learning, Deep Q Networks)
 
 # result
-[![result.mov]](https://github.com/gtg7784/trycatch-ai/blob/master/result/result.mov)
+[![result](http://img.youtube.com/vi/xvwUP6mAbwc/0.jpg)](https://youtu.be/xvwUP6mAbwc) 
 
 # 코드 설명
 
